@@ -4,84 +4,89 @@ import ccxt
 from datetime import datetime
 import time
 
-# 1. 페이지 설정 및 스타일
-st.set_page_config(page_title="코인 무적 엔진 v4.0", layout="wide")
+# 1. 페이지 설정
+st.set_page_config(page_title="코인 무적 엔진 v5.0", layout="wide")
 st.title("💰 8분할 거미줄 자동매매 시스템")
 
-# 2. 새로고침해도 데이터 유지하는 마법 (Session State)
+# 2. 새로고침 방지용 데이터 저장소 (세션 상태)
 if 'yesu' not in st.session_state: st.session_state.yesu = 10000000
 if 'inv_p' not in st.session_state: st.session_state.inv_p = 0
 if 'avg' not in st.session_state: st.session_state.avg = 0
 if 'logs' not in st.session_state: st.session_state.logs = []
-if 'price_history' not in st.session_state: st.session_state.price_history = []
 
-# 3. 실시간 가격 및 히스토리 저장
+# 3. 사이드바 - 차트 시간 선택 (콤보박스)
+with st.sidebar:
+    st.header("⚙️ 차트 설정")
+    time_frame = st.selectbox("차트 시간 선택", ['1m', '5m', '30m', '1h', '4h', '1d'], index=0)
+    st.info("선택한 시간에 따라 차트가 갱신됩니다.")
+
+# 4. 실시간 데이터 가져오기 (업비트)
 try:
     upbit = ccxt.upbit()
-    ticker = upbit.fetch_ticker('BTC/KRW')
-    price = ticker['last']
-    st.session_state.price_history.append(price)
-    if len(st.session_state.price_history) > 20: # 차트에는 최근 20개만 표시
-        st.session_state.price_history.pop(0)
-    st.success(f"✅ 연결 성공 | 현재가: {price:,.0f}원")
+    # 캔들 데이터 (OHLCV) 가져오기
+    ohlcv = upbit.fetch_ohlcv('BTC/KRW', timeframe=time_frame, limit=50)
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms') + pd.Timedelta(hours=9) # 한국 시간
+    
+    curr_price = df['close'].iloc[-1]
+    st.success(f"✅ 업비트 연결 중 | 현재가: {curr_price:,.0f}원")
 except:
-    price = 0
-    st.error("❌ 거래소 연결 대기 중...")
+    st.error("❌ 거래소 데이터를 가져오는 중입니다...")
+    st.stop()
 
-# 4. 자산 및 수익 계산
-curr_v = (st.session_state.inv_p / st.session_state.avg * price) if st.session_state.avg > 0 else 0
-s_rate = ((price - st.session_state.avg) / st.session_state.avg * 100) if st.session_state.avg > 0 else 0
+# 5. 자산 계산
+curr_v = (st.session_state.inv_p / st.session_state.avg * curr_price) if st.session_state.avg > 0 else 0
+s_rate = ((curr_price - st.session_state.avg) / st.session_state.avg * 100) if st.session_state.avg > 0 else 0
 total = st.session_state.yesu + curr_v
 
-# 5. [차트 1] 코인 현황 실시간 차트
-st.subheader("📈 비트코인 가격 흐름 (실시간)")
-if st.session_state.price_history:
-    chart_data = pd.DataFrame(st.session_state.price_history, columns=['Price'])
-    st.line_chart(chart_data, height=200)
+# 6. [차트] 실시간 가격 흐름 + 내 평균 매수가 표시
+st.subheader(f"📈 비트코인 {time_frame} 차트")
+# 내 평균 매수가 컬럼 추가
+df['평균매수가'] = st.session_state.avg if st.session_state.avg > 0 else None
 
-# 6. 상단 대시보드
+# 라인 차트 표시 (현재가와 내 평단가 비교)
+chart_df = df.set_index('timestamp')[['close', '평균매수가']]
+st.line_chart(chart_df)
+
+# 7. 대시보드
 c1, c2, c3 = st.columns(3)
 c1.metric("🏦 총 자산", f"{total:,.0f}원")
 c2.metric("💵 예수금", f"{st.session_state.yesu:,.0f}원")
 c3.metric("📊 수익률", f"{s_rate:.2f}%", delta=f"{s_rate:.2f}%")
 
-# 7. [차트 2] 수익률 지표 바 (시각화)
 st.write("**📊 수익률 지표 현황**")
-st.progress(min(max((s_rate + 10) / 20, 0.0), 1.0)) # -10% ~ +10% 범위를 바 형태로 표시
+st.progress(min(max((s_rate + 10) / 20, 0.0), 1.0))
 
 st.divider()
 
-# 8. 매매 로직 (버튼 클릭 시 데이터 즉시 반영)
-col_buy, col_reset = st.columns([3, 1])
-
-with col_buy:
-    # 8분할 로직에 따른 버튼 노출 (예시: 1차)
-    if st.button("🚀 매수 실행 (100만원 투입)", use_container_width=True):
+# 8. 매매 버튼
+col1, col2 = st.columns([3, 1])
+with col1:
+    if st.button(f"🚀 {len(st.session_state.logs)+1}차 매수 실행 (100만원)", use_container_width=True):
         if st.session_state.yesu >= 1000000:
-            # 평단가 계산 (물타기 공식)
             if st.session_state.avg == 0:
-                st.session_state.avg = price
+                st.session_state.avg = curr_price
             else:
                 old_q = st.session_state.inv_p / st.session_state.avg
-                new_q = 1000000 / price
+                new_q = 1000000 / curr_price
                 st.session_state.avg = (st.session_state.inv_p + 1000000) / (old_q + new_q)
             
             st.session_state.yesu -= 1000000
             st.session_state.inv_p += 1000000
-            st.session_state.logs.append([datetime.now().strftime('%H:%M:%S'), "매수", f"{price:,.0f}원"])
+            st.session_state.logs.append([datetime.now().strftime('%H:%M:%S'), f"{len(st.session_state.logs)+1}차 매수", f"{curr_price:,.0f}원"])
             st.balloons()
             st.rerun()
 
-with col_reset:
-    if st.button("⏹️ 데이터 리셋", use_container_width=True):
+with col2:
+    if st.button("⏹️ 전체 초기화", use_container_width=True):
         st.session_state.clear()
         st.rerun()
 
-# 9. 매매 기록 테이블
+# 9. 매매 기록
 if st.session_state.logs:
     st.subheader("📅 매매 기록")
     st.table(pd.DataFrame(st.session_state.logs[::-1], columns=['시간', '작업', '체결가']))
 
-# 자동 새로고침 (5초마다 가격 갱신)
-time.sleep(5)
+# 10초마다 자동 갱신
+time.sleep(10)
 st.rerun()
