@@ -3,37 +3,49 @@ import pandas as pd
 import ccxt
 from datetime import datetime
 
-# 1. 화면 기본 설정
-st.set_page_config(page_title="코인 8분할 엔진 v0.2", layout="centered")
+# 1. 앱 설정
+st.set_page_config(page_title="코인 8분할 v0.25", layout="centered")
 
-# 2. 데이터 초기화 (에러 방지용)
-if 'balance' not in st.session_state: st.session_state.balance = 10000000 
-if 'is_running' not in st.session_state: st.session_state.is_running = False 
-if 'buy_count' not in st.session_state: st.session_state.buy_count = 0 
+# 2. 데이터 초기화 (한 줄로 정리해서 오류 방지)
+if 'balance' not in st.session_state: st.session_state.balance = 10000000
+if 'run' not in st.session_state: st.session_state.run = False
+if 'buy' not in st.session_state: st.session_state.buy = 0
 if 'logs' not in st.session_state: st.session_state.logs = []
 
-# 3. 메인 타이틀
-st.title("🟢 모의 투자 (1,000만원)")
+# 3. 메인 화면
+st.title("🟢 비트코인 8분할 매매")
+st.subheader(f"💰 현재 잔고: {st.session_state.balance:,.0f}원")
 
-# 4. 가동 버튼 (들여쓰기 완전 제거형)
+# 4. 버튼 (왼쪽 벽에 딱 붙여서 작성)
 if st.button("▶️ 자동매매 시작", use_container_width=True):
-    st.session_state.is_running = True
+    st.session_state.run = True
     now = datetime.now().strftime('%H:%M:%S')
     st.session_state.logs.append([now, "BTC", "감시 시작", "연동 완료", "0%"])
-    st.success("엔진이 가동되었습니다!")
+    st.success("매매 가동!")
 
 if st.button("⏹️ 일시 정지", use_container_width=True):
-    st.session_state.is_running = False
-    st.warning("엔진이 정지되었습니다.")
+    st.session_state.run = False
+    st.warning("정지됨")
 
-# 5. 실시간 시세 조회
+# 5. 시세 표시
 st.divider()
 try:
     upbit = ccxt.upbit()
-    ticker = upbit.fetch_ticker('BTC/KRW')
-    price = ticker['last']
-    st.metric("현재 비트코인 가격", f"{price:,.0f} KRW")
-    st.metric("현재 잔고", f"{st.session_state.balance:,.0f} KRW")
+    price = upbit.fetch_ticker('BTC/KRW')['last']
+    st.metric("현재 BTC 시세", f"{price:,.0f} KRW")
+except:
+    st.write("시세 로딩 중...")
+
+# 6. 매수 단계 표시
+st.write("🧩 매수 단계: " + "🟢" * st.session_state.buy + "⚪" * (8 - st.session_state.buy))
+
+# 7. 기록 표
+st.subheader("📅 매매 기록")
+if len(st.session_state.logs) > 0:
+    df = pd.DataFrame(st.session_state.logs, columns=['시간', '종목', '구분', '가격', '수익률'])
+    st.table(df)
+else:
+    st.write("버튼을 누르면 기록이 뜹니다.")
 except:
     st.write("시세를 불러오는 중입니다...")
 
