@@ -3,18 +3,19 @@ import pandas as pd
 import ccxt
 from datetime import datetime
 
-st.set_page_config(page_title="코인 8분할 v0.3")
+# 1. 앱 설정
+st.set_page_config(page_title="코인 8분할 v0.35")
 
-# 1. 초기 설정
+# 2. 데이터 초기화
 if 'balance' not in st.session_state: st.session_state.balance = 10000000
 if 'run' not in st.session_state: st.session_state.run = False
 if 'logs' not in st.session_state: st.session_state.logs = []
 
-# 2. 메인 화면
+# 3. 메인 화면
 st.title("🟢 비트코인 8분할 매매")
 st.write(f"### 💰 현재 자산: {st.session_state.balance:,.0f}원")
 
-# 3. 가동 버튼
+# 4. 가동 버튼
 if st.button("▶️ 자동매매 시작", use_container_width=True):
     st.session_state.run = True
     now = datetime.now().strftime('%H:%M:%S')
@@ -25,15 +26,20 @@ if st.button("⏹️ 일시 정지", use_container_width=True):
     st.session_state.run = False
     st.warning("정지됨")
 
-# 4. 실시간 시세
+# 5. 실시간 시세 (가장 단순한 형태)
 st.divider()
 upbit = ccxt.upbit()
-price = upbit.fetch_ticker('BTC/KRW')['last']
+ticker = upbit.fetch_ticker('BTC/KRW')
+price = ticker['last']
 st.metric("현재 비트코인 시세", f"{price:,.0f} KRW")
 
-# 5. 매매 기록 표
+# 6. 매매 기록 표
 st.subheader("📅 매매 기록")
-if st.session_state.logs:
+if len(st.session_state.logs) > 0:
+    df = pd.DataFrame(st.session_state.logs, columns=['시간', '종목', '구분', '가격', '수익률'])
+    st.table(df)
+else:
+    st.write("버튼을 누르면 기록이 뜹니다.")
     df = pd.DataFrame(st.session_state.logs, columns=['시간', '종목', '구분', '가격', '수익률'])
     st.table(df)
 else:
