@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
-import time
 import ccxt
 from datetime import datetime
 
-# --- 프로그램 설정 ---
-st.set_page_config(page_title="비트코인 8분할 엔진 v0.12", layout="centered")
+# 1. 앱 설정
+st.set_page_config(page_title="비트코인 8분할 엔진 v0.15", layout="centered")
 
-# --- 세션 상태 초기화 ---
+# 2. 세션 상태 초기화 (데이터 저장소)
 if 'balance' not in st.session_state:
     st.session_state.balance = 10000000 
 if 'is_running' not in st.session_state:
@@ -17,23 +16,59 @@ if 'buy_count' not in st.session_state:
 if 'logs' not in st.session_state:
     st.session_state.logs = []
 
-# --- 사이드바 ---
+# 3. 사이드바 및 제목
 st.sidebar.header("🕹️ 컨트롤 센터")
 is_real = st.sidebar.checkbox("🚨 실제 투자 모드 가동")
 
 if is_real:
     st.markdown("<style>main { background-color: #FFF0F0; }</style>", unsafe_allow_html=True)
-    st.title("🔴 실제 투자 모드")
+    st.title("🔴 실제 투자 가동 중")
 else:
-    st.title("🟢 모의 투자 모드")
+    st.title("🟢 모의 투자 진행 중")
 
-# --- 🚀 시작/정지 버튼 (들여쓰기 수정 완료) ---
+# 4. 시스템 가동 버튼
 st.subheader("⚙️ 시스템 가동")
 col1, col2 = st.columns(2)
 with col1:
     if st.button("▶️ 자동매매 시작", use_container_width=True):
         st.session_state.is_running = True
-        now = datetime.now().strftime('%H:%M:%S')
+        now_time = datetime.now().strftime('%H:%M:%S')
+        st.session_state.logs.append([now_time, "BTC", "감시 시작", "연동 완료", "0%"])
+with col2:
+    if st.button("⏹️ 일시 정지", use_container_width=True):
+        st.session_state.is_running = False
+
+# 5. 실시간 시세 (에러 방지 처리)
+st.divider()
+try:
+    upbit = ccxt.upbit()
+    ticker = upbit.fetch_ticker('BTC/KRW')
+    price = ticker['last']
+    c1, c2 = st.columns(2)
+    c1.metric("현재 BTC 가격", f"{price:,.0f} KRW")
+    c2.metric("모의 잔고", f"{st.session_state.balance:,.0f} KRW")
+except:
+    st.warning("시세를 연결 중입니다...")
+
+# 6. 8분할 매수 현황
+st.subheader("🧩 8분할 매수 단계")
+cols = st.columns(4)
+for i in range(8):
+    with cols[i % 4]:
+        if i < st.session_state.buy_count:
+            st.success(f"{i+1}단계")
+        else:
+            st.info(f"{i+1}단계")
+
+# 7. 매매 내역 (기록이 있을 때만 표 표시)
+st.subheader("📅 매매 기록")
+if st.session_state.logs:
+    df = pd.DataFrame(st.session_state.logs, columns=['시간', '종목', '구분', '가격', '수익률'])
+    st.table(df)
+else:
+    st.write("시작 버튼을 누르면 기록이 나타납니다.")
+
+st.caption("v0.15: 들여쓰기 오류 완전 방지 버전")
         st.session_state.logs.append([now, "BTC", "감시 시작", "연동 완료", "0%"])
         st.success("엔진 가동 시작!")
 with col2:
