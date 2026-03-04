@@ -4,157 +4,146 @@ import ccxt
 import plotly.graph_objects as go
 from datetime import datetime
 import time
-import json
-import os
 
-# --- 1. 설정 및 데이터 로드 ---
-SAVE_FILE = "trading_data_v10.json"
+# --- 페이지 설정 ---
+st.set_page_config(page_title="코인 거미줄 v11", layout="wide")
 
-def save_data(data):
-    with open(SAVE_FILE, 'w') as f:
-        json.dump(data, f)
+# --- 데이터 유지 (모의투자용) ---
+if 'mock_data' not in st.session_state:
+    st.session_state.mock_data = {"yesu": 10000000, "inv_p": 0, "avg": 0, "logs": []}
+if 'is_real' not in st.session_state:
+    st.session_state.is_real = False
 
-def load_data():
-    if os.path.exists(SAVE_FILE):
-        with open(SAVE_FILE, 'r') as f:
-            return json.load(f)
-    return {"yesu": 10000000, "inv_p": 0, "avg": 0, "logs": [], "history": []}
-
-# 데이터 초기화
-if 'data' not in st.session_state:
-    st.session_state.data = load_data()
-
-# --- 2. 사이드바 (설정창) ---
-with st.sidebar:
-    st.header("⚙️ 시스템 설정")
-    
-    # 모드 선택
-    mode = st.toggle("🚀 실전 매매 모드 활성화", value=False)
-    
-    upbit = None
-    if mode:
-        st.info("실전 모드: 업비트 API 키를 입력하세요")
-        access = st.text_input("Access Key", type="password")
-        secret = st.text_input("Secret Key", type="password")
-        if access and secret:
-            try:
-                upbit = ccxt.upbit({'apiKey': access, 'secret': secret, 'enableRateLimit': True})
-                st.success("✅ 업비트 연결 성공 (실전)")
-            except:
-                st.error("❌ 키를 확인해주세요")
-    else:
-        st.write("현재: **모의 투자 모드 (검증용)**")
-
-    st.divider()
-    # 키보드 방지 라디오 버튼
-    time_frame = st.radio("차트 시간", ['1m', '5m', '30m', '1h', '4h', '1d'], index=2)
-    
-    if st.button("⏹️ 전체 초기화"):
-        if os.path.exists(SAVE_FILE): os.remove(SAVE_FILE)
-        st.session_state.clear()
-        st.rerun()
-
-# --- 3. 테마 및 상단 바 설정 ---
-# 모드에 따라 핑크(모의) / 블루(실전) 테마 적용
-main_color = "#3498db" if mode and upbit else "#ff69b4"
-mode_text = "🔥 실전 매매 가동 중" if mode and upbit else "🌸 모의 투자 검증 중"
+# --- 테마 설정 (모드에 따른 색상 변화) ---
+theme_color = "#3498db" if st.session_state.is_real else "#ff69b4"
+bg_gradient = "linear-gradient(135deg, #1e3a8a, #3498db)" if st.session_state.is_real else "linear-gradient(135deg, #831843, #ff69b4)"
 
 st.markdown(f"""
     <style>
-    .stApp {{ border-top: 10px solid {main_color}; }}
-    .mode-header {{ background-color: {main_color}; color: white; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold; margin-bottom: 20px; }}
+    .main {{ background: #0e1117; }}
+    div[data-testid="stMetricValue"] {{ color: {theme_color}; font-size: 1.8rem; font-weight: bold; }}
+    .mode-indicator {{
+        background: {bg_gradient};
+        color: white; padding: 15px; border-radius: 15px; text-align: center;
+        font-size: 1.2rem; font-weight: bold; margin-bottom: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }}
+    .stButton>button {{ border-radius: 20px; border: 1px solid {theme_color}; }}
     </style>
-    <div class="mode-header">{mode_text}</div>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# --- 4. 데이터 엔진 (실전 vs 모의) ---
+# --- 상단 모드 전환 영역 ---
+st.markdown(f'<div class="mode-indicator">{"🚀 실전 매매 운용 중" if st.session_state.is_real else "🌸 모의 투자 검증 중"}</div>', unsafe_allow_html=True)
+
+m1, m2 = st.columns(2)
+with m1:
+    if st.button("🌸 모의투자 모드", use_container_width=True):
+        st.session_state.is_real = False
+        st.rerun()
+with m2:
+    if st.button("🚀 실전투자 모드", use_container_width=True):
+        st.session_state.is_real = True
+
+# 실전 모드 시 API 입력창 활성화
+upbit = None
+if st.session_state.is_real:
+    with st.expander("🔑 업비트 API 키 설정 (보안 유지)", expanded=True):
+        access = st.text_input("Access Key", type="password", placeholder="여기에 입력하세요")
+        secret = st.text_input("Secret Key", type="password", placeholder="여기에 입력하세요")
+        if access and secret:
+            try:
+                upbit = ccxt.upbit({'apiKey': access, 'secret': secret})
+                st.success("✅ 실전 계좌 연결 성공!")
+            except:
+                st.error("❌ 키가 올바르지 않습니다.")
+        else:
+            st.warning("API 키를 입력해야 실전 잔고가 표시됩니다.")
+
+# --- 데이터 엔진 ---
 try:
     public_upbit = ccxt.upbit()
     ticker = public_upbit.fetch_ticker('BTC/KRW')
     curr_price = ticker['last']
     
-    if mode and upbit:
-        # 실전 데이터 가져오기
+    if st.session_state.is_real and upbit:
         bal = upbit.fetch_balance()
         yesu = bal['KRW']['free']
         btc_bal = bal.get('BTC', {'total': 0, 'avgPrice': 0})
         inv_p = btc_bal['total'] * btc_bal['avgPrice']
         avg_price = btc_bal['avgPrice']
-        total_asset = yesu + (btc_bal['total'] * curr_price)
     else:
-        # 모의 데이터 사용
-        yesu = st.session_state.data['yesu']
-        inv_p = st.session_state.data['inv_p']
-        avg_price = st.session_state.data['avg']
-        total_asset = yesu + ( (inv_p / avg_price * curr_price) if avg_price > 0 else 0 )
-
+        # 모의투자 데이터
+        yesu = st.session_state.mock_data['yesu']
+        inv_p = st.session_state.mock_data['inv_p']
+        avg_price = st.session_state.mock_data['avg']
+    
+    total_asset = yesu + ( (inv_p / avg_price * curr_price) if avg_price > 0 else 0 )
     s_rate = ((curr_price - avg_price) / avg_price * 100) if avg_price > 0 else 0
 except:
-    st.error("데이터를 불러오는 중입니다...")
+    st.info("데이터를 불러오는 중...")
     st.stop()
 
-# --- 5. 대시보드 및 차트 ---
-st.title("💰 거미줄 자동매매 시스템")
-
+# --- 메인 대시보드 ---
 c1, c2, c3 = st.columns(3)
 c1.metric("🏦 총 자산", f"{total_asset:,.0f}원")
 c2.metric("💵 예수금", f"{yesu:,.0f}원")
-c3.metric("📈 수익률", f"{s_rate:.2f}%", delta=f"{s_rate:.2f}%")
+c3.metric("📈 수익률", f"{s_rate:.2f}%")
 
-# 캔들 차트
-ohlcv = public_upbit.fetch_ohlcv('BTC/KRW', timeframe=time_frame, limit=50)
+# --- 차트 시간 설정 (키보드 안 뜨는 방식) ---
+st.write("⏱️ **차트 시간 단위 선택**")
+time_frame = st.segmented_control(
+    "시간단위", 
+    options=['1m', '5m', '30m', '1h', '4h', '1d'], 
+    default='30m',
+    key="tf_choice"
+)
+
+# 차트 그리기
+ohlcv = public_upbit.fetch_ohlcv('BTC/KRW', timeframe=time_frame or '30m', limit=50)
 df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'vol'])
 df['time'] = pd.to_datetime(df['time'], unit='ms') + pd.Timedelta(hours=9)
 fig = go.Figure(data=[go.Candlestick(x=df['time'], open=df['open'], high=df['high'], low=df['low'], close=df['close'])])
 if avg_price > 0:
     fig.add_hline(y=avg_price, line_dash="dash", line_color="red", annotation_text="내 평단")
-fig.update_layout(height=350, margin=dict(l=5, r=5, b=5, t=5), showlegend=False)
+fig.update_layout(height=350, margin=dict(l=10, r=10, b=10, t=10), template="plotly_dark")
 st.plotly_chart(fig, use_container_width=True)
 
-# --- 6. 8분할 알고리즘 계산 및 매수 버튼 ---
+# --- 8분할 매수 알고리즘 버튼 ---
 st.divider()
-# 1차 매수금 산정 (총자산의 5% 혹은 최소 100만원)
-first_buy_unit = max(1000000, total_asset * 0.05) 
+logs = st.session_state.mock_data['logs']
+next_step = len(logs) + 1
+# 공식: 1차는 100만, 2차부터는 총 투입금의 2/3
+buy_amt = 1000000 if next_step == 1 else inv_p * (2/3)
 
-def calc_next_buy(logs, total_inv):
-    step = len(logs) + 1
-    if step == 1: return first_buy_unit
-    return total_inv * (2/3)  # 언니의 황금 공식: 이전 총액의 2/3
-
-next_buy_amt = calc_next_buy(st.session_state.data['logs'], inv_p)
-
-if st.button(f"🚀 {len(st.session_state.data['logs'])+1}차 매수 실행 ({next_buy_amt:,.0f}원 투입)", use_container_width=True):
-    if yesu >= next_buy_amt:
-        new_inv = inv_p + next_buy_amt
-        if avg_price == 0:
-            new_avg = curr_price
+if st.button(f"🔥 {next_step}차 거미줄 매수 실행 ({buy_amt:,.0f}원)", use_container_width=True, type="primary"):
+    if yesu >= buy_amt:
+        # 매수 로직 (모의투자용 예시)
+        new_inv = inv_p + buy_amt
+        if avg_price == 0: new_avg = curr_price
         else:
-            old_qty = inv_p / avg_price
-            new_qty = next_buy_amt / curr_price
-            new_avg = new_inv / (old_qty + new_qty)
+            old_q = inv_p / avg_price
+            new_q = buy_amt / curr_price
+            new_avg = new_inv / (old_q + new_q)
         
-        # 데이터 업데이트
-        st.session_state.data['yesu'] -= next_buy_amt
-        st.session_state.data['inv_p'] = new_inv
-        st.session_state.data['avg'] = new_avg
-        st.session_state.data['logs'].append({
-            '시간': datetime.now().strftime('%H:%M:%S'),
-            '차수': f"{len(st.session_state.data['logs'])+1}차",
-            '가격': f"{curr_price:,.0f}원",
-            '투입금': f"{next_buy_amt:,.0f}원"
+        st.session_state.mock_data['yesu'] -= buy_amt
+        st.session_state.mock_data['inv_p'] = new_inv
+        st.session_state.mock_data['avg'] = new_avg
+        st.session_state.mock_data['logs'].append({
+            '시간': datetime.now().strftime('%H:%M'),
+            '차수': f"{next_step}차",
+            '투입금': f"{buy_amt:,.0f}",
+            '상태': '완료'
         })
-        save_data(st.session_state.data)
-        st.balloons()
+        st.toast(f"{next_step}차 매수 완료!")
         st.rerun()
 
-# --- 7. 매매 내역 및 자산 차트 ---
-tab1, tab2 = st.tabs(["📋 매매 내역", "📉 자산 흐름"])
-with tab1:
-    if st.session_state.data['logs']:
-        st.table(pd.DataFrame(st.session_state.data['logs'][::-1]))
-with tab2:
-    st.write("자산 변동 그래프가 준비 중입니다.")
+# --- 매매 내역 표 ---
+st.subheader("📋 매매 기록")
+if logs:
+    st.table(pd.DataFrame(logs[::-1]))
+else:
+    st.caption("기록이 없습니다.")
 
-# 10초 자동 갱신
+# 자동 갱신
 time.sleep(10)
 st.rerun()
