@@ -96,4 +96,19 @@ try:
 
     # 차트
     ohlcv = public_api.fetch_ohlcv('BTC/KRW', timeframe='30m', limit=50)
-    df = pd.DataFrame(ohlcv, columns=['
+    df = pd.DataFrame(ohlcv, columns=['time','open','high','low','close','vol'])
+    fig = go.Figure(data=[go.Candlestick(x=pd.to_datetime(df['time'], unit='ms'), open=df['open'], high=df['high'], low=df['low'], close=df['close'])])
+    fig.update_layout(height=400, template="plotly_dark", margin=dict(l=0,r=0,b=0,t=0))
+    st.plotly_chart(fig, use_container_width=True)
+
+except Exception as e:
+    st.warning("🔄 데이터를 연결하고 있습니다...")
+
+# --- 5. IP 주소 안내 (최하단) ---
+try:
+    curr_ip = requests.get("https://api64.ipify.org", timeout=3).text
+    st.markdown(f"<p style='text-align:right; color:gray;'>📍 현재 IP: {curr_ip}</p>", unsafe_allow_html=True)
+except: pass
+
+time.sleep(15)
+st.rerun()
