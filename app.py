@@ -1,91 +1,61 @@
-
 import streamlit as st
 import pandas as pd
 import ccxt
-import json
-import os
 from datetime import datetime
 
-# --- 데이터 저장 (파일 방식이라 절대 안 날아감) ---
-DB = "trade_final.json"
-def load():
-    if os.path.exists(DB):
-        try:
-            with open(DB, "r") as f: return json.load(f)
-        except: pass
-    return {"yesu": 10000000, "inv_p": 0, "avg": 0, "run": False, "step": 0, "logs": []}
+# 1. 화면 기본 설정
+st.set_page_config(page_title="코인 엔진 v1.3", layout="wide")
+st.title("💰 비트코인 8분할 엔진")
 
-def save(data):
-    with open(DB, "w") as f: json.dump(data, f)
+# 2. 데이터 초기화 (세션 스테이트 사용)
+if 'yesu' not in st.session_state:
+    st.session_state.yesu = 10000000
+if 'inv' not in st.session_state:
+    st.session_state.inv = 0
+if 'avg' not in st.session_state:
+    st.session_state.avg = 0
+if 'logs' not in st.session_state:
+    st.session_state.logs = []
 
-d = load()
-
-# --- 설정 및 시세 ---
-st.set_page_config(page_title="코인 8분할 무적 엔진")
-st.title("🛡️ 8분할 거미줄 매매 v1.2")
-
+# 3. 실시간 가격 가져오기
 try:
     upbit = ccxt.upbit()
     price = upbit.fetch_ticker('BTC/KRW')['last']
-except: price = 0
+except:
+    price = 0
 
-# --- 수익률 및 자산 정밀 계산 ---
-curr_val = (d['inv_p'] / d['avg'] * price) if d['avg'] > 0 else 0
-s_geum = curr_val - d['inv_p']
-s_rate = (s_geum / d['inv_p'] * 100) if d['inv_p'] > 0 else 0
-total = d['yesu'] + curr_val
+# 4. 수익 및 자산 계산
+curr_val = (st.session_state.inv / st.session_state.avg * price) if st.session_state.avg > 0 else 0
+s_geum = curr_val - st.session_state.inv
+s_rate = (s_geum / st.session_state.inv * 100) if st.session_state.inv > 0 else 0
+total = st.session_state.yesu + curr_val
 
-# --- 상단 전광판 ---
-st.metric("🏦 총 자산 (평가금액)", f"{total:,.0f}원")
+# 5. 전광판 표시
+st.metric("🏦 총 자산", f"{total:,.0f}원")
 c1, c2, c3 = st.columns(3)
-c1.metric("💵 예수금", f"{d['yesu']:,.0f}원")
+c1.metric("💵 예수금 (잔고)", f"{st.session_state.yesu:,.0f}원")
 c2.metric("📈 수익금", f"{s_geum:,.0f}원")
 c3.metric("📊 수익률", f"{s_rate:.2f}%")
 
-st.info(f"현재가: {price:,.0f}원 | 내 평단: {d['avg']:,.0f}원")
+st.divider()
+st.info(f"📍 현재가: {price:,.0f}원 | 🔵 내 평단: {st.session_state.avg:,.0f}원")
 
-# --- 8분할 자동 매수 로직 (언니의 알고리즘) ---
-if d['run']:
-    # 2차: -4% 하락 시 1차의 115% 매수
-    if d['step'] == 1 and s_rate <= -4:
-        buy_amt = 1000000 * 1.15
-        d['yesu'] -= buy_amt
-        d['avg'] = ((d['inv_p'] + buy_amt) / (d['inv_p']/d['avg'] + buy_amt/price))
-        d['inv_p'] += buy_amt
-        d['step'] = 2
-        d['logs'].append([datetime.now().strftime('%H:%M'), "2차 매수", "-4% 하락 물타기"])
-        save(d)
-        st.rerun()
-    
-    # 3차: -6% 하락 시 (1+2차) 합계의 2/3 매수
-    elif d['step'] == 2 and s_rate <= -6:
-        buy_amt = d['inv_p'] * (2/3)
-        d['yesu'] -= buy_amt
-        d['avg'] = ((d['inv_p'] + buy_amt) / (d['inv_p']/d['avg'] + buy_amt/price))
-        d['inv_p'] += buy_amt
-        d['step'] = 3
-        d['logs'].append([datetime.now().strftime('%H:%M'), "3차 매수", "-6% 하락 물타기"])
-        save(d)
-        st.rerun()
-
-# --- 제어 버튼 ---
-col_st, col_ed = st.columns(2)
-if col_st.button("▶️ 1차 매수 시작", use_container_width=True):
-    if not d['run']:
-        d['run'], d['step'] = True, 1
-        amt = 1000000 # 1차 100만원
-        d['yesu'] -= amt
-        d['inv_p'], d['avg'] = amt, price
-        d['logs'].append([datetime.now().strftime('%H:%M'), "1차 매수", "시작"])
-        save(d)
-        st.rerun()
-
-if col_ed.button("⏹️ 전체 종료 및 매도", use_container_width=True):
-    d = {"yesu": total, "inv_p": 0, "avg": 0, "run": False, "step": 0, "logs": []}
-    save(d)
+# 6. 매매 버튼
+col1, col2 = st.columns(2)
+if col1.button("▶️ 1차 매수 시작", use_container_width=True):
+    amt = 1000000
+    st.session_state.yesu -= amt
+    st.session_state.inv = amt
+    st.session_state.avg = price
+    st.session_state.logs.append([datetime.now().strftime('%H:%M'), "1차 매수", f"{price:,.0f}"])
     st.rerun()
 
-# --- 기록 기록 ---
-st.subheader("📅 매매 로그")
-if d['logs']:
-    st.table(pd.DataFrame(d['logs'][::-1], columns=['시간', '작업', '내용']))
+if col2.button("⏹️ 전체 종료", use_container_width=True):
+    st.session_state.yesu = total
+    st.session_state.inv, st.session_state.avg = 0, 0
+    st.session_state.logs = []
+    st.rerun()
+
+# 7. 기록 표
+if st.session_state.logs:
+    st.table(pd.DataFrame(st.session_state.logs[::-1], columns=['시간', '작업', '가격']))
