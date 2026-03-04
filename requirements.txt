@@ -1,1 +1,4 @@
 ccxt
+pandas
+streamlit
+plotly
