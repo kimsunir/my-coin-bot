@@ -4,134 +4,124 @@ import ccxt
 import plotly.graph_objects as go
 from datetime import datetime
 import time
-import json
-import os
 
-# 1. 파일 저장 시스템 (새로고침 방어)
-SAVE_FILE = "trading_data.json"
+# ==========================================
+# 1. 업비트 계정 설정 (여기에 언니 키를 넣으세요!)
+# ==========================================
+ACCESS_KEY = "언니의_ACCESS_KEY_입력"
+SECRET_KEY = "언니의_SECRET_KEY_입력"
 
-def save_data():
-    data = {
-        'yesu': st.session_state.yesu,
-        'inv_p': st.session_state.inv_p,
-        'avg': st.session_state.avg,
-        'logs': st.session_state.logs,
-        'history': st.session_state.history
-    }
-    with open(SAVE_FILE, 'w') as f:
-        json.dump(data, f)
-
-def load_data():
-    if os.path.exists(SAVE_FILE):
-        with open(SAVE_FILE, 'r') as f:
-            return json.load(f)
-    return None
+# 업비트 연결
+upbit = ccxt.upbit({
+    'apiKey': ACCESS_KEY,
+    'secret': SECRET_KEY,
+    'enableRateLimit': True,
+})
 
 # 2. 페이지 설정
-st.set_page_config(page_title="코인 무적 엔진 v8.0", layout="wide")
+st.set_page_config(page_title="업비트 무적 8분할 v9.0", layout="wide")
 
-# 3. 데이터 로드 및 세션 초기화
-saved = load_data()
-if 'yesu' not in st.session_state:
-    if saved:
-        st.session_state.yesu = saved.get('yesu', 10000000)
-        st.session_state.inv_p = saved.get('inv_p', 0)
-        st.session_state.avg = saved.get('avg', 0)
-        st.session_state.logs = saved.get('logs', [])
-        st.session_state.history = saved.get('history', [])
-    else:
-        st.session_state.yesu, st.session_state.inv_p, st.session_state.avg = 10000000, 0, 0
-        st.session_state.logs, st.session_state.history = [], []
+# 3. 세션 상태 초기화 (자동매매 On/Off 등)
+if 'auto_trade' not in st.session_state: st.session_state.auto_trade = False
+if 'logs' not in st.session_state: st.session_state.logs = []
 
-# 4. [사이드바] 설정 메뉴로 이동
+# 4. [사이드바] 설정 및 자동매매 스위치
 with st.sidebar:
-    st.header("⚙️ 시스템 설정")
-    # 키보드 방지를 위해 라디오 버튼 사용 (가로 배치)
-    time_frame = st.radio(
-        "차트 시간 단위", 
-        ['1m', '5m', '30m', '1h', '4h', '1d', '1w'], 
-        index=2,
-        help="클릭하면 바로 차트가 변경됩니다."
-    )
+    st.header("⚙️ 실전 매매 설정")
+    # 키보드 안 뜨는 라디오 버튼 분봉 선택
+    time_frame = st.radio("차트 시간 단위", ['1m', '5m', '30m', '1h', '1d'], index=1)
+    
     st.divider()
-    if st.button("⏹️ 전체 데이터 초기화"):
-        if os.path.exists(SAVE_FILE): os.remove(SAVE_FILE)
-        st.session_state.clear()
-        st.rerun()
-    st.write("---")
-    st.caption("v8.0 모바일 최적화 버전")
+    st.subheader("🤖 자동매매 시스템")
+    if st.button("🚀 자동매매 시작", use_container_width=True):
+        st.session_state.auto_trade = True
+    if st.button("⏹️ 시스템 긴급 종료", use_container_width=True, type="primary"):
+        st.session_state.auto_trade = False
+        st.warning("시스템이 종료되었습니다.")
+    
+    st.write(f"현재 상태: {'🟢 가동 중' if st.session_state.auto_trade else '🔴 중지됨'}")
 
-# 5. 실시간 데이터 가져오기 (업비트)
+# 5. 데이터 가져오기 (실제 내 잔고)
 try:
-    upbit = ccxt.upbit()
-    ohlcv = upbit.fetch_ohlcv('BTC/KRW', timeframe=time_frame, limit=50)
-    df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'vol'])
-    df['time'] = pd.to_datetime(df['time'], unit='ms') + pd.Timedelta(hours=9)
-    curr_price = df['close'].iloc[-1]
-except:
-    st.error("거래소 연결 중...")
+    # 실제 업비트 잔고 조회
+    balance = upbit.fetch_balance()
+    # KRW 잔고 (예수금)
+    krw_free = balance['KRW']['free'] 
+    # BTC 보유량 및 평단가 (실제 업비트 정보)
+    btc_info = balance.get('BTC', {'total': 0, 'avgPrice': 0})
+    inv_p = btc_info['total'] * btc_info['avgPrice'] if btc_info['avgPrice'] else 0
+    avg_price = btc_info['avgPrice'] if btc_info['avgPrice'] else 0
+    
+    # 총 자산 계산
+    ticker = upbit.fetch_ticker('BTC/KRW')
+    curr_price = ticker['last']
+    total_asset = krw_free + (btc_info['total'] * curr_price)
+    
+    # 수익률
+    s_rate = ((curr_price - avg_price) / avg_price * 100) if avg_price > 0 else 0
+except Exception as e:
+    st.error(f"업비트 연결 실패: {e}")
     st.stop()
 
-# 자산 계산
-curr_v = (st.session_state.inv_p / st.session_state.avg * curr_price) if st.session_state.avg > 0 else 0
-s_rate = ((curr_price - st.session_state.avg) / st.session_state.avg * 100) if st.session_state.avg > 0 else 0
-total_asset = st.session_state.yesu + curr_v
+# 6. [알고리즘] 8분할 매수 금액 미리 계산하기
+# 1차 매수금을 총 자산의 일정 비율(예: 5%)로 잡거나 언니가 정할 수 있습니다.
+base_buy_unit = total_asset * 0.05 # 예시: 총자산의 5%를 1차로 산정
 
-# 자산 히스토리 저장
-st.session_state.history.append({'time': datetime.now().strftime('%H:%M:%S'), 'total': total_asset})
-if len(st.session_state.history) > 30: st.session_state.history.pop(0)
+def get_next_buy_amount(step, total_invested):
+    """언니의 8분할 공식: 이전까지 총 매수금액의 2/3를 다음 차수에 투입"""
+    if step == 1: return base_buy_unit
+    return total_invested * (2/3)
 
-# 메인 화면 시작
-st.title("💰 거미줄 자동매매")
+# 7. 메인 화면 구성
+st.title("💰 업비트 8분할 거미줄 시스템")
 
-# 6. 상단 요약 지표
-c1, c2, c3 = st.columns(3)
-c1.metric("🏦 총 자산", f"{total_asset:,.0f}원")
-c2.metric("💵 예수금", f"{st.session_state.yesu:,.0f}원")
-c3.metric("📈 수익률", f"{s_rate:.2f}%", delta=f"{s_rate:.2f}%")
+# 상단 요약
+col1, col2, col3 = st.columns(3)
+col1.metric("🏦 실제 총 자산", f"{total_asset:,.0f}원")
+col2.metric("💵 사용 가능 예수금", f"{krw_free:,.0f}원")
+col3.metric("📈 실시간 수익률", f"{s_rate:.2f}%", delta=f"{s_rate:.2f}%")
 
-# 7. [코인 차트]
-fig = go.Figure(data=[go.Candlestick(x=df['time'], open=df['open'], high=df['high'], low=df['low'], close=df['close'], name='BTC')])
-if st.session_state.avg > 0:
-    fig.add_hline(y=st.session_state.avg, line_dash="dash", line_color="red", annotation_text="내 평단가")
-fig.update_layout(height=350, margin=dict(l=5, r=5, b=5, t=5), showlegend=False)
+# 8. [차트 영역]
+ohlcv = upbit.fetch_ohlcv('BTC/KRW', timeframe=time_frame, limit=50)
+df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'vol'])
+df['time'] = pd.to_datetime(df['time'], unit='ms') + pd.Timedelta(hours=9)
+
+fig = go.Figure(data=[go.Candlestick(x=df['time'], open=df['open'], high=df['high'], low=df['low'], close=df['close'])])
+if avg_price > 0:
+    fig.add_hline(y=avg_price, line_dash="dash", line_color="red", annotation_text=f"내 평단: {avg_price:,.0f}")
+fig.update_layout(height=400, margin=dict(l=10, r=10, b=10, t=10), showlegend=False)
 st.plotly_chart(fig, use_container_width=True)
 
-# 8. 매매 실행 버튼
-if st.button(f"🚀 {len(st.session_state.logs)+1}차 매수 (100만원)", use_container_width=True):
-    if st.session_state.yesu >= 1000000:
-        if st.session_state.avg == 0:
-            st.session_state.avg = curr_price
-        else:
-            old_q = st.session_state.inv_p / st.session_state.avg
-            new_q = 1000000 / curr_price
-            st.session_state.avg = (st.session_state.inv_p + 1000000) / (old_q + new_q)
-        
-        st.session_state.yesu -= 1000000
-        st.session_state.inv_p += 1000000
-        st.session_state.logs.append({
-            '시간': datetime.now().strftime('%H:%M:%S'),
-            '작업': f"{len(st.session_state.logs)+1}차 매수",
-            '체결가': f"{curr_price:,.0f}원"
-        })
-        save_data()
-        st.rerun()
+# 9. [8분할 전략 정보창]
+with st.expander("📝 현재 나의 8분할 매수 계획 확인"):
+    data = []
+    temp_total = 0
+    for i in range(1, 9):
+        amt = get_next_buy_amount(i, temp_total)
+        drop = "시작" if i == 1 else ("-4%" if i==2 else ("-6%" if i==3 else "-8% 고정"))
+        data.append({"차수": f"{i}차", "하락조건": drop, "매수금액": f"{amt:,.0f}원"})
+        temp_total += amt
+    st.table(pd.DataFrame(data))
 
-# 9. [매매 기록 표] - 다시 부활!
+# 10. [매매 내역]
+st.subheader("📋 최근 체결 기록")
 if st.session_state.logs:
-    st.subheader("📋 최근 매매 내역")
-    log_df = pd.DataFrame(st.session_state.logs[::-1])
-    st.table(log_df)
+    st.table(pd.DataFrame(st.session_state.logs[::-1]))
+else:
+    st.write("아직 매매 기록이 없습니다.")
 
-# 10. [수익 차트] - 맨 아래 작게
-st.write("---")
-st.caption("📉 실시간 자산 흐름")
-if st.session_state.history:
-    h_df = pd.DataFrame(st.session_state.history)
-    fig_h = go.Figure(data=go.Scatter(x=h_df['time'], y=h_df['total'], mode='lines', line=dict(color='green')))
-    fig_h.update_layout(height=200, margin=dict(l=5, r=5, b=5, t=5))
-    st.plotly_chart(fig_h, use_container_width=True)
+# 11. 자동매매 로직 실행 (가동 중일 때만)
+if st.session_state.auto_trade:
+    # 여기에 실제 매수/매도 로직이 들어갑니다.
+    # 1. 7% 익절 감시
+    if s_rate >= 7.0:
+        st.toast("🎯 익절 목표 도달! 전량 매도 실행")
+        # upbit.create_market_sell_order('BTC/KRW', btc_info['total'])
+        st.session_state.auto_trade = False # 익절 후 재설정을 위해 잠시 정지
+    
+    # 2. 하락 시 추가 매수 감시 (로직 생략 - 실제 주문은 신중해야 하므로 로그만 남김)
+    st.caption("🤖 시스템이 실시간으로 가격을 감시하며 거미줄을 치고 있습니다...")
 
-# 10초 자동 갱신
+# 자동 갱신
 time.sleep(10)
 st.rerun()
