@@ -7,15 +7,17 @@ from datetime import datetime
 import time
 
 # --- 1. 기본 설정 및 데이터 보존 ---
-st.set_page_config(page_title="거미줄 v29 최종", layout="wide")
+st.set_page_config(page_title="거미줄 v30 최종", layout="wide")
 
 if 'mock_data' not in st.session_state:
     st.session_state.mock_data = {"yesu": 10000000, "inv_p": 0, "avg": 0, "logs": []}
 if 'is_real' not in st.session_state:
     st.session_state.is_real = False
+if 'real_auth' not in st.session_state:
+    st.session_state.real_auth = None
 
 # --- 2. 최상단 모드 전환 ---
-st.title("💎 부석 8분할 거미줄 v29")
+st.title("💎 부석 8분할 거미줄 v30")
 c1, c2 = st.columns(2)
 with c1:
     if st.button("🌸 모의투자 모드", use_container_width=True, type="primary" if not st.session_state.is_real else "secondary"):
@@ -26,42 +28,56 @@ with c2:
 
 st.divider()
 
-# --- 3. 실전 투자 연동창 (IP 에러 해결용) ---
+# --- 3. 실전 투자 연동 및 잔고 가져오기 ---
+real_cash, real_coin_val, real_total = 0, 0, 0
 if st.session_state.is_real:
     with st.container(border=True):
         st.subheader("🔑 업비트 실전 연동")
         acc = st.text_input("Access Key", type="password")
         sec = st.text_input("Secret Key", type="password")
-        if st.button("🔌 계좌 연결하기", use_container_width=True):
+        if st.button("🔌 계좌 잔고 불러오기", use_container_width=True):
             try:
                 up_real = ccxt.upbit({'apiKey': acc, 'secret': sec})
-                up_real.fetch_balance()
-                st.success("✅ [성공] 이제 실전 투자가 가능합니다!")
+                balance = up_real.fetch_balance()
+                st.session_state.real_auth = {'acc': acc, 'sec': sec}
+                st.success("✅ 실전 잔고 동기화 완료!")
             except Exception as e:
-                st.error(f"❌ 연결 실패: IP 주소({requests.get('https://api64.ipify.org').text})를 업비트에 등록했는지 확인하세요.")
+                st.error("❌ 연결 실패: API 키와 IP 설정을 다시 확인하세요.")
 
-# --- 4. 시세 및 자산 현황 ---
+# --- 4. 시세 및 자산 현황 (실전/모의 분기) ---
 try:
     up_pub = ccxt.upbit()
     curr_p = up_pub.fetch_ticker('BTC/KRW')['last']
-    m = st.session_state.mock_data
     
-    # 알고리즘 계산 (현재가 반영)
-    coin_val = (m['inv_p'] / m['avg'] * curr_p) if m['avg'] > 0 else 0
-    total_a = m['yesu'] + coin_val
-    s_rate = ((curr_p - m['avg']) / m['avg'] * 100) if m['avg'] > 0 else 0
+    if st.session_state.is_real and st.session_state.real_auth:
+        # [실전] 실제 업비트 데이터 가져오기
+        up_real = ccxt.upbit({'apiKey': st.session_state.real_auth['acc'], 'secret': st.session_state.real_auth['sec']})
+        bal = up_real.fetch_balance()
+        real_cash = float(bal.get('KRW', {}).get('free', 0))
+        btc_amount = float(bal.get('BTC', {}).get('total', 0))
+        real_coin_val = btc_amount * curr_p
+        display_total = real_cash + real_coin_val
+        display_cash = real_cash
+        display_rate = 0.0 # 실전 수익률은 업비트 평단가 데이터가 필요하여 일단 0으로 표시
+    else:
+        # [모의] 기존 로직 유지
+        m = st.session_state.mock_data
+        coin_v = (m['inv_p'] / m['avg'] * curr_p) if m['avg'] > 0 else 0
+        display_total = m['yesu'] + coin_v
+        display_cash = m['yesu']
+        display_rate = ((curr_p - m['avg']) / m['avg'] * 100) if m['avg'] > 0 else 0
 
     col_a, col_b, col_c = st.columns(3)
-    col_a.metric("🏦 총 자산", f"{total_a:,.0f}원")
-    col_b.metric("💵 현금", f"{m['yesu']:,.0f}원")
-    col_c.metric("📈 수익률", f"{s_rate:.2f}%")
+    col_a.metric("🏦 총 자산", f"{display_total:,.0f}원")
+    col_b.metric("💵 현금 잔고", f"{display_cash:,.0f}원")
+    col_c.metric("📈 수익률", f"{display_rate:.2f}%")
 
     # 매수 버튼 (모의투자 전용)
     if not st.session_state.is_real:
-        st.write("")
-        buy_amt = 1111111 # 언니의 8분할 매수 금액
-        step = len(m['logs']) + 1
-        if st.button(f"🔥 {step}차 거미줄 매수 ({buy_amt:,.0f}원 투입)", use_container_width=True, type="primary"):
+        buy_amt = 1111111
+        step = len(st.session_state.mock_data['logs']) + 1
+        if st.button(f"🔥 {step}차 모의 매수 실행", use_container_width=True, type="primary"):
+            m = st.session_state.mock_data
             if m['yesu'] >= buy_amt:
                 new_inv = m['inv_p'] + buy_amt
                 new_avg = curr_p if m['avg'] == 0 else new_inv / ((m['inv_p']/m['avg']) + (buy_amt/curr_p))
@@ -69,16 +85,17 @@ try:
                 m['logs'].append({'시간': datetime.now().strftime('%H:%M:%S'), '차수': f"{step}차", '가격': f"{curr_p:,.0f}"})
                 st.balloons(); st.rerun()
 
-    # --- 5. [중요] 매매 기록 표와 차트 ---
+    # --- 5. 기록 및 차트 ---
     st.divider()
-    tab1, tab2 = st.tabs(["📋 매매 기록 리스트", "📊 비트코인 차트"])
-    
+    tab1, tab2 = st.tabs(["📋 매매 기록", "📊 비트코인 차트"])
     with tab1:
-        if m['logs']:
-            st.table(pd.DataFrame(m['logs'][::-1]))
+        if not st.session_state.is_real:
+            if st.session_state.mock_data['logs']:
+                st.table(pd.DataFrame(st.session_state.mock_data['logs'][::-1]))
+            else: st.info("모의투자 기록이 없습니다.")
         else:
-            st.info("아직 매수 기록이 없습니다. 위 버튼을 눌러보세요!")
-
+            st.info("실전 매매 내역은 업비트 앱에서 확인 가능합니다.")
+            
     with tab2:
         ohlcv = up_pub.fetch_ohlcv('BTC/KRW', timeframe='30m', limit=50)
         df = pd.DataFrame(ohlcv, columns=['time','open','high','low','close','vol'])
@@ -87,6 +104,6 @@ try:
         st.plotly_chart(fig, use_container_width=True)
 
 except Exception as e:
-    st.warning("🔄 데이터를 불러오는 중입니다... (새로고침을 눌러보세요)")
+    st.warning("🔄 시세 데이터를 불러오는 중...")
 
 time.sleep(20); st.rerun()
