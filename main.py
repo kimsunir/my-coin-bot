@@ -3,37 +3,33 @@ import pandas as pd
 import ccxt
 from datetime import datetime
 
-# 1. 앱 설정
-st.set_page_config(page_title="코인 8분할 v0.35")
+# 1. 화면 기본 설정
+st.title("🟢 비트코인 8분할 매매")
 
-# 2. 데이터 초기화
+# 2. 자산 정보 (한 줄씩 따로 작성)
 if 'balance' not in st.session_state: st.session_state.balance = 10000000
-if 'run' not in st.session_state: st.session_state.run = False
 if 'logs' not in st.session_state: st.session_state.logs = []
 
-# 3. 메인 화면
-st.title("🟢 비트코인 8분할 매매")
-st.write(f"### 💰 현재 자산: {st.session_state.balance:,.0f}원")
+st.metric("현재 자산", f"{st.session_state.balance:,.0f}원")
 
-# 4. 가동 버튼
+# 3. 매매 시작 버튼
 if st.button("▶️ 자동매매 시작", use_container_width=True):
-    st.session_state.run = True
     now = datetime.now().strftime('%H:%M:%S')
-    st.session_state.logs.append([now, "BTC", "감시시작", "연동완료", "0%"])
-    st.success("매매 가동 중!")
+    st.session_state.logs.append([now, "BTC", "감시시작", "정상연동", "0%"])
+    st.success("엔진이 가동되었습니다!")
 
-if st.button("⏹️ 일시 정지", use_container_width=True):
-    st.session_state.run = False
-    st.warning("정지됨")
-
-# 5. 실시간 시세 (가장 단순한 형태)
+# 4. 실시간 시세 (가장 안전한 호출 방식)
 st.divider()
 upbit = ccxt.upbit()
 ticker = upbit.fetch_ticker('BTC/KRW')
 price = ticker['last']
-st.metric("현재 비트코인 시세", f"{price:,.0f} KRW")
+st.metric("실시간 BTC 가격", f"{price:,.0f} KRW")
 
-# 6. 매매 기록 표
+# 5. 매매 기록
+st.subheader("📅 최근 기록")
+if st.session_state.logs:
+    df = pd.DataFrame(st.session_state.logs, columns=['시간', '종목', '구분', '상태', '수익'])
+    st.table(df)
 st.subheader("📅 매매 기록")
 if len(st.session_state.logs) > 0:
     df = pd.DataFrame(st.session_state.logs, columns=['시간', '종목', '구분', '가격', '수익률'])
