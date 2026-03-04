@@ -5,19 +5,19 @@ import ccxt
 from datetime import datetime
 
 # --- 프로그램 설정 ---
-st.set_page_config(page_title="비트코인 8분할 엔진 v0.11", layout="centered")
+st.set_page_config(page_title="비트코인 8분할 엔진 v0.12", layout="centered")
 
-# --- 세션 상태 초기화 (에러 방지용 필수 코드) ---
+# --- 세션 상태 초기화 ---
 if 'balance' not in st.session_state:
     st.session_state.balance = 10000000 
 if 'is_running' not in st.session_state:
     st.session_state.is_running = False 
 if 'buy_count' not in st.session_state:
     st.session_state.buy_count = 0 
-if 'logs' not in st.session_state:  # <--- 이 부분이 에러를 잡아줄 핵심!
+if 'logs' not in st.session_state:
     st.session_state.logs = []
 
-# --- 사이드바 및 배경 ---
+# --- 사이드바 ---
 st.sidebar.header("🕹️ 컨트롤 센터")
 is_real = st.sidebar.checkbox("🚨 실제 투자 모드 가동")
 
@@ -27,13 +27,51 @@ if is_real:
 else:
     st.title("🟢 모의 투자 모드")
 
-# --- 🚀 시작/정지 버튼 ---
+# --- 🚀 시작/정지 버튼 (들여쓰기 수정 완료) ---
 st.subheader("⚙️ 시스템 가동")
 col1, col2 = st.columns(2)
 with col1:
     if st.button("▶️ 자동매매 시작", use_container_width=True):
         st.session_state.is_running = True
-        # 시작 버튼 누르면 첫 로그 기록 생성
+        now = datetime.now().strftime('%H:%M:%S')
+        st.session_state.logs.append([now, "BTC", "감시 시작", "연동 완료", "0%"])
+        st.success("엔진 가동 시작!")
+with col2:
+    if st.button("⏹️ 일시 정지", use_container_width=True):
+        st.session_state.is_running = False
+        st.warning("엔진이 정지되었습니다.")
+
+# --- 실시간 시세 및 잔고 ---
+st.divider()
+try:
+    upbit = ccxt.upbit()
+    ticker = upbit.fetch_ticker('BTC/KRW')
+    current_price = ticker['last']
+    c1, c2 = st.columns(2)
+    c1.metric("현재 BTC 가격", f"{current_price:,.0f} KRW")
+    c2.metric("모의 투자 잔고", f"{st.session_state.balance:,.0f} KRW")
+except:
+    st.error("시세를 불러오는 중...")
+
+# --- 8분할 매수 현황판 ---
+st.subheader("🧩 8분할 매수 진행도")
+cols = st.columns(4)
+for i in range(8):
+    with cols[i % 4]:
+        if i < st.session_state.buy_count:
+            st.success(f"{i+1}단계 완료")
+        else:
+            st.info(f"{i+1}단계 대기")
+
+# --- 매매 로그 ---
+st.subheader("📅 날짜별 매매 내역")
+if len(st.session_state.logs) > 0:
+    df_logs = pd.DataFrame(st.session_state.logs, columns=['시간', '종목', '구분', '가격', '수익률'])
+    st.table(df_logs)
+else:
+    st.write("상단의 [시작] 버튼을 누르면 기록이 표시됩니다.")
+
+st.caption("v0.12: 들여쓰기 에러 수정 및 안정화 버전")
         now = datetime.now().strftime('%H:%M:%S')
         st.session_state.logs.append([now, "BTC", "감시 시작", "연동 완료", "0%"])
         st.success("엔진 가동! 1,000만원 모의투자가 시작되었습니다.")
