@@ -1,4 +1,9 @@
 import streamlit as st
+from datetime import datetime
+st.write("DEPLOY CHECK v40", datetime.now())
+
+
+import streamlit as st
 import pandas as pd
 import ccxt
 import plotly.graph_objects as go
