@@ -1,5 +1,5 @@
-streamlit
-ccxt>=4.3.72
+requests>=2.31.0
+ccxt
 pandas
-requests
 plotly
+streamlit
