@@ -104,15 +104,30 @@ if "last_refresh" not in st.session_state:
 # Cached price fetch
 # =========================
 @st.cache_data(ttl=3, show_spinner=False)
-def get_current_prices(tickers: list[str]) -> dict:
+def get_current_prices(tickers):
     if not tickers:
         return {}
-    return pyupbit.get_current_price(tickers) or {}
+
+    # 캐시 해시 안정화를 위해 list -> tuple 권장(선택)
+    t = tuple(tickers)
+
+    res = pyupbit.get_current_price(list(t))
+
+    # 1) 단일 티커일 때 float로 오는 케이스 방어
+    if isinstance(res, (int, float)):
+        return {t[0]: float(res)}
+
+    # 2) 정상 dict 케이스
+    if isinstance(res, dict):
+        return res
+
+    # 3) None/str/기타 케이스 방어
+    return {}
 
 
 def get_price_one(ticker: str):
-    d = get_current_prices([ticker])
-    return d.get(ticker)
+    prices = get_current_prices([ticker])
+    return prices.get(ticker)
 
 
 # =========================
