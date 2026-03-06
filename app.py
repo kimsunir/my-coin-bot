@@ -11,19 +11,39 @@ import time
 
 import streamlit as st
 
-BASE_FONT = 14  # 12~16 사이 추천(모바일)
-METRIC_FONT = 24
+def css_mock_font(sm=12):
+    st.markdown(f"""
+    <style>
+    .mock-scope * {{
+        font-size: {sm}px !important;
+        line-height: 1.25 !important;
+    }}
 
-st.markdown(f"""
-<style>
-html, body, [class*="css"] {{
-  font-size: {BASE_FONT}px !important;
-}}
-div[data-testid="stMetricValue"] {{
-  font-size: {METRIC_FONT}px !important;
-}}
-</style>
-""", unsafe_allow_html=True)
+    /* metric 라벨/값 */
+    [data-testid="stMetricLabel"] p {{
+        font-size: {sm}px !important;
+    }}
+    [data-testid="stMetricValue"] {{
+        font-size: {sm+6}px !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+# 모의 탭 들어갈 때만 호출
+css_mock_font(11)
+
+st.markdown('<div class="mock-scope">', unsafe_allow_html=True)
+# ---- 여기부터 모의투자 UI ----
+# st.dataframe(...)
+# st.metric(...)
+# st.write(...)
+# ----------------------------
+st.markdown('</div>', unsafe_allow_html=True)
+
+
+
+
+
 
 
 # =========================================================
