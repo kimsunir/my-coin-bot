@@ -9,6 +9,23 @@ import traceback
 import requests
 import time
 
+import streamlit as st
+
+BASE_FONT = 14  # 12~16 사이 추천(모바일)
+METRIC_FONT = 24
+
+st.markdown(f"""
+<style>
+html, body, [class*="css"] {{
+  font-size: {BASE_FONT}px !important;
+}}
+div[data-testid="stMetricValue"] {{
+  font-size: {METRIC_FONT}px !important;
+}}
+</style>
+""", unsafe_allow_html=True)
+
+
 # =========================================================
 # 부석 거미줄 v42 (요청반영 최종)
 # - 최상단 Outbound IP 항상 표시(변경 감지)
