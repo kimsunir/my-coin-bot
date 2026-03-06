@@ -4,7 +4,7 @@ import ccxt
 import plotly.graph_objects as go
 from datetime import datetime
 
-1. 지폴드 화면 설정
+
 st.set_page_config(page_title="거미줄 v39", layout="wide")
 
 데이터 저장 (없으면 만들기)
@@ -13,7 +13,7 @@ if 'm' not in st.session_state:
 if 'real' not in st.session_state:
     st.session_state.real = False
 
-2. 사이드바 (지폴드 기럭지 활용)
+
 with st.sidebar:
     st.header("⚙️ 설정")
     st.session_state.real = st.checkbox("🚀 실전모드 작동")
@@ -24,7 +24,7 @@ with st.sidebar:
     acc = st.text_input("Access Key", type="password")
     sec = st.text_input("Secret Key", type="password")
 
-3. 데이터 로직 (실전/모의 합산)
+
 try:
     up = ccxt.upbit()
     curr_p = up.fetch_ticker('BTC/KRW')['last']
@@ -43,20 +43,20 @@ try:
         cash, avg_p = m['y'], m['avg']
         total = cash + ((m['inv']/avg_p*curr_p) if avg_p > 0 else 0)
 
-4. 메인 화면 출력
+
     st.title("💎 부석 거미줄 v39")
     a, b, c = st.columns(3)
     a.metric("🏦 총자산", f"{total:,.0f}")
     b.metric("💵 현금", f"{cash:,.0f}")
     c.metric("🎯 평단", f"{avg_p:,.0f}")
 
-매수 버튼 (8분할 알고리즘)
+
     step = len(st.session_state.m['logs']) + 1
     if st.button(f"🔥 {step}차 매수 실행 (1,111,111원)", use_container_width=True, type="primary"):
         if cash >= 1111111:
             if st.session_state.real: # 실제 주문
                 r_up.create_market_buy_order('BTC/KRW', 1111111)
-기록 업데이트
+
             m = st.session_state.m
             new_inv = m['inv'] + 1111111
             m['avg'] = curr_p if m['avg']==0 else new_inv / ((m['inv']/m['avg']) + (1111111/curr_p))
@@ -65,7 +65,7 @@ try:
             m['logs'].append({'시간': datetime.now().strftime('%H:%M'), '가격': curr_p})
             st.rerun()
 
-5. 탭 구성
+
     t1, t2 = st.tabs(["📊 차트 & 평단선", "📋 매수 기록"])
     with t1:
         tf = st.radio("분봉", ["1m", "5m", "30m", "1h"], index=2, horizontal=True)
