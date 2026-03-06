@@ -2,4 +2,4 @@ requests>=2.31.0
 ccxt
 pandas
 plotly
-streamlit
+streamlit==1.42.0
