@@ -1,8 +1,5 @@
 streamlit
-pyupbit
+ccxt>=4.3.72
 pandas
+requests
 plotly
-requests>=2.31.0
-ccxt==4.3.72
-
-
