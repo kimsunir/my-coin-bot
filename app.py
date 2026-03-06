@@ -7,7 +7,6 @@ from datetime import datetime
 
 st.set_page_config(page_title="거미줄 v39", layout="wide")
 
-데이터 저장 (없으면 만들기)
 if 'm' not in st.session_state:
     st.session_state.m = {"y": 10000000, "inv": 0, "avg": 0, "logs": []}
 if 'real' not in st.session_state:
