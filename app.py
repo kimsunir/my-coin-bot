@@ -27,7 +27,7 @@ with st.sidebar:
 try:
     up = ccxt.upbit()
     curr_p = up.fetch_ticker('BTC/KRW')['last']
-자산 계산
+
     if st.session_state.real and acc and sec:
         try:
             r_up = ccxt.upbit({'apiKey': acc, 'secret': sec})
